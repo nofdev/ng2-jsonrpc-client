@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "noImplicitAny": true,
+        "module": "commonjs",
+        "target": "ES5",
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "sourceMap": true,
+        "declaration": true
+    },
+    "files": [
+        "src/client.ts",
+        "src/client.config.ts",
+        "index.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
