@@ -105,10 +105,10 @@ function post<T>(apiUrl: string, headers: Headers): Promise<T> {
         .toPromise()
         .then((res: Response) => {
             let data = res.json();
-            if(data.error){
-
-            } 
-            data.val 
+            if (data.err) {
+                return Promise.reject(data.err);
+            }
+            return (res.json().val)
         })
         .catch((error: any) => handleError(error));
 
