@@ -51,7 +51,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
     let apiBaseUrl = config.apiUrl + '/' + jsonidl.package + '/' + jsonidl.name.replace("Facade", "");
     let proxy: any = {};
     jsonidl.methods.forEach((element:any) => {
-        proxy[element.name] = function (): Promise<any> {
+        proxy[element.name] = function (): Promise<T> {
 
             let args: any[] = [];
             for (let i: number = 0; i < element.args.length; i++) {
@@ -59,7 +59,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             }
             let apiUrl = `${apiBaseUrl}/${element.name}?params=[${args.join(',')}]`;
 
-            return postHandle(apiUrl, args);
+            return postHandle<T>(apiUrl, args);
 
         }
     });
@@ -70,30 +70,46 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
 function handleError(error: any) {
     let errMsg = (error.message) ? error.message :
         error.status ? `${error.status} - ${error.statusText}` : 'Server error';
-    let errBody = JSON.parse(error._body);
-    let errDetail = `${errBody.code} = ${errBody.error} - ${errBody.error_description}`;
+    let errBody: any;
+    let errDetail: string;
+    if (typeof error._body === "string") {
+        errBody = JSON.parse(error._body)
+        errDetail = `${errBody.code} = ${errBody.error} - ${errBody.error_description}`;
+    } else {
+        if (error.msg) {//server custom error
+            return Promise.reject(error);
+        }
+    }
     console.error(errDetail); // log to console instead
     return Promise.reject(errMsg);
 }
 
-function postHandle(apiUrl: string, args: Object[]): Promise<any> {
+function postHandle<T>(apiUrl: string, args: Object[]): Promise<T> {
     if (_getToken) {
 
         let apiToken = getTokenFromCookie();
-        _headers.append("Authorization", `Bearer ${apiToken}`);
+        if(!_headers.has("Authorization")){
+            _headers.append("Authorization", `Bearer ${apiToken}`);
+        }
 
-        return post(apiUrl, _headers);
+        return post<T>(apiUrl, _headers);
 
     } else {
-        return post(apiUrl, _headers);
+        return post<T>(apiUrl, _headers);
     }
 }
 
-function post(apiUrl: string, headers: Headers): Promise<any> {
+function post<T>(apiUrl: string, headers: Headers): Promise<T> {
 
     return _http.post(apiUrl, null, { headers: headers })
         .toPromise()
-        .then((res: Response) => res.json())
+        .then((res: Response) => {
+            let data = res.json();
+            if(data.error){
+
+            } 
+            data.val 
+        })
         .catch((error: any) => handleError(error));
 
 }
