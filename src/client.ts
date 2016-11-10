@@ -24,7 +24,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
     }
 
     if (_tokenConfig) {
-        
+
         if (!_tokenConfig.apiTokenUrl
             || !_tokenConfig.params.client_id || !_tokenConfig.params.client_secret || !_tokenConfig.params.grant_type) {
             throw Error("apiTokenUrl and params's client_id/client_secret/grant_type of config's api_tokenConfig can not be null!");
@@ -50,8 +50,8 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
     }
     let apiBaseUrl = config.apiUrl + '/' + jsonidl.package + '/' + jsonidl.name.replace("Facade", "");
     let proxy: any = {};
-    jsonidl.methods.forEach((element:any) => {
-        proxy[element.name] = function (): Promise<T> {
+    jsonidl.methods.forEach((element: any) => {
+        proxy[element.name] = function (): Promise<any> {
 
             let args: any[] = [];
             for (let i: number = 0; i < element.args.length; i++) {
@@ -59,7 +59,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             }
             let apiUrl = `${apiBaseUrl}/${element.name}?params=[${args.join(',')}]`;
 
-            return postHandle<T>(apiUrl, args);
+            return postHandle(apiUrl, args);
 
         }
     });
@@ -75,7 +75,10 @@ function handleError(error: any) {
     if (typeof error._body === "string") {
         errBody = JSON.parse(error._body)
         errDetail = `${errBody.code} = ${errBody.error} - ${errBody.error_description}`;
-    } else {
+    } if (typeof error._body === "object") {
+        errDetail = `it looks like a http error. status: ${error.status}, ok: ${error.ok}, statusText: ${error.statusText}`;
+    }
+    else {
         if (error.msg) {//server custom error
             return Promise.reject(error);
         }
@@ -84,22 +87,22 @@ function handleError(error: any) {
     return Promise.reject(errMsg);
 }
 
-function postHandle<T>(apiUrl: string, args: Object[]): Promise<T> {
+function postHandle(apiUrl: string, args: Object[]): Promise<any> {
     if (_getToken) {
 
         let apiToken = getTokenFromCookie();
-        if(!_headers.has("Authorization")){
+        if (!_headers.has("Authorization")) {
             _headers.append("Authorization", `Bearer ${apiToken}`);
         }
 
-        return post<T>(apiUrl, _headers);
+        return post(apiUrl, _headers);
 
     } else {
-        return post<T>(apiUrl, _headers);
+        return post(apiUrl, _headers);
     }
 }
 
-function post<T>(apiUrl: string, headers: Headers): Promise<T> {
+function post(apiUrl: string, headers: Headers): Promise<any> {
 
     return _http.post(apiUrl, null, { headers: headers })
         .toPromise()
