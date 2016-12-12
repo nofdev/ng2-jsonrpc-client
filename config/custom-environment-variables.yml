@@ -1,0 +1,4 @@
+proxy:
+    userfacade:
+        url: PROXY_USERFACADE_URL
+        interface: PROXY_USERFACADE_INTERFACE

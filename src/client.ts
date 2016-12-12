@@ -1,73 +1,61 @@
-import { Http, Response, Headers, RequestOptions } from '@angular/http';
-import { Cookie } from 'ng2-cookies/ng2-cookies';
+import { Http, Response, Headers,URLSearchParams } from '@angular/http';
 import 'rxjs/add/observable/throw';
 import 'rxjs/add/operator/toPromise';
 
-import { clientConfig, apiTokenConfig } from './client.config';
-
-const API_TOKEN_KEY = "api_token";
-
-let _headers: Headers = new Headers();
-_headers.append("Content-Type", "application/x-www-form-urlencoded");
-
-let _tokenConfig: apiTokenConfig;
-let _getToken: boolean = false;
+import { clientConfig } from './client.config';
 
 let _http: Http;
 
 export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
     _http = http;
-    _tokenConfig = config.apiTokenConfig;
-
     if (!config.apiUrl || !config.facadeName) {
         throw Error("config's apiUrl and facadeName can not be null!");
     }
-
-    if (_tokenConfig) {
-
-        if (!_tokenConfig.apiTokenUrl
-            || !_tokenConfig.params.client_id || !_tokenConfig.params.client_secret || !_tokenConfig.params.grant_type) {
-            throw Error("apiTokenUrl and params's client_id/client_secret/grant_type of config's api_tokenConfig can not be null!");
-        }
-
-        _getToken = true;
-        if (!getTokenFromCookie()) {
-            getToken();
-        }
-    }
-
-
-    let jsonidl: any;
-
+    let itemidl: any;
     for (let item of jsonIdl.interfaces) {
         if (item.package + "." + item.name === config.facadeName) {
-            jsonidl = item;
+            itemidl = item;
             break;
         }
     }
-    if (!jsonidl) {
+    if (!itemidl) {
         throw new Error(`there is not ${config.facadeName}`);
     }
-    let apiBaseUrl = config.apiUrl + '/' + jsonidl.package + '/' + jsonidl.name.replace("Facade", "");
+    let apiBaseUrl = config.apiUrl + '/json/facade/' + itemidl.package + '/' + itemidl.name.replace("Facade", "");
     let proxy: any = {};
-    jsonidl.methods.forEach((element: any) => {
-        proxy[element.name] = function (): Promise<any> {
+    let _headers: Headers = new Headers();
+    _headers.append("Content-Type", "application/x-www-form-urlencoded");
 
+    itemidl.methods.forEach((element: any) => {
+        proxy[element.name] = function (): Promise<any> {
             let args: any[] = [];
             for (let i: number = 0; i < element.args.length; i++) {
                 args.push(`"${arguments[i]}"`);
             }
-            let apiUrl = `${apiBaseUrl}/${element.name}?params=[${args.join(',')}]`;
-
-            return postHandle(apiUrl, args);
-
+            let apiUrl = `${apiBaseUrl}/${element.name}`;
+            return post(apiUrl, args, _headers);
         }
     });
     return proxy;
 };
 
+function post(apiUrl: string, args: Array<any>, headers: Headers): Promise<any> {
+    return _http.post(apiUrl, paramsEncode(args), { headers: headers })
+        .toPromise()
+        .then(extractData)
+        .catch(handleError);
+}
 
-function handleError(error: any) {
+let extractData = (res: Response) => {
+    let data = res.json();
+    if (data.err) {
+        return Promise.reject(data.err);
+    } else {
+        return (res.json().val)
+    }
+};
+
+let handleError = (error: any) => {
     let errMsg = (error.message) ? error.message :
         error.status ? `${error.status} - ${error.statusText}` : 'Server error';
     let errBody: any;
@@ -85,59 +73,10 @@ function handleError(error: any) {
     }
     console.error(errDetail); // log to console instead
     return Promise.reject(errMsg);
-}
+};
 
-function postHandle(apiUrl: string, args: Object[]): Promise<any> {
-    if (_getToken) {
-
-        let apiToken = getTokenFromCookie();
-        if (!_headers.has("Authorization")) {
-            _headers.append("Authorization", `Bearer ${apiToken}`);
-        }
-
-        return post(apiUrl, _headers);
-
-    } else {
-        return post(apiUrl, _headers);
-    }
-}
-
-function post(apiUrl: string, headers: Headers): Promise<any> {
-
-    return _http.post(apiUrl, null, { headers: headers })
-        .toPromise()
-        .then((res: Response) => {
-            let data = res.json();
-            if (data.err) {
-                return Promise.reject(data.err);
-            }
-            return (res.json().val)
-        })
-        .catch((error: any) => handleError(error));
-
-}
-
-function getTokenFromCookie(): string {
-    let token: string = Cookie.get(API_TOKEN_KEY);
-
-    return token;
-}
-
-function getToken() {
-    _headers.delete("Authorization");
-    let params = `grant_type=${_tokenConfig.params.grant_type}&client_id=${_tokenConfig.params.client_id}&client_secret=${_tokenConfig.params.client_secret}`;
-    return _http.post(_tokenConfig.apiTokenUrl, params, { headers: _headers })
-        .toPromise()
-        .then((res: Response) => {
-            let token = res.json();
-            let tokenValue: string = token.access_token;
-            setToken(tokenValue, token.expires_in);
-
-            setInterval(getToken, token.expires_in * 900);//每隔有效期的90%更新一次token
-        })
-        .catch((error: any) => handleError(error));
-}
-
-function setToken(token: string, expires: number) {
-    Cookie.set(API_TOKEN_KEY, token, expires / 86400);
+function paramsEncode(obj: Array<Object>): string {
+    let urlSearchParams = new URLSearchParams();
+    urlSearchParams.append('params', JSON.stringify(obj));
+    return urlSearchParams.toString();
 }
