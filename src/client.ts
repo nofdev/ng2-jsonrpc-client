@@ -1,7 +1,8 @@
 import { Http, Response, Headers, RequestOptions } from '@angular/http';
 import { Cookie } from 'ng2-cookies/ng2-cookies';
-import 'rxjs/add/observable/throw';
-import 'rxjs/add/operator/toPromise';
+import {Observable} from 'rxjs/Observable';
+import 'rxjs/add/operator/map';
+import 'rxjs/add/operator/catch';
 
 import { clientConfig, apiTokenConfig } from './client.config';
 
@@ -39,7 +40,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
 
     let jsonidl: any;
 
-    for (let item of jsonIdl.interfaces) {
+    for (let item of jsonIdl) {
         if (item.package + "." + item.name === config.facadeName) {
             jsonidl = item;
             break;
@@ -51,7 +52,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
     let apiBaseUrl = config.apiUrl + '/' + jsonidl.package + '/' + jsonidl.name.replace("Facade", "");
     let proxy: any = {};
     jsonidl.methods.forEach((element: any) => {
-        proxy[element.name] = function (): Promise<any> {
+        proxy[element.name] = function (): Observable<any> {
 
             let args: any[] = [];
             for (let i: number = 0; i < element.args.length; i++) {
@@ -80,14 +81,14 @@ function handleError(error: any) {
     }
     else {
         if (error.msg) {//server custom error
-            return Promise.reject(error);
+            return Observable.throw(error);
         }
     }
     console.error(errDetail); // log to console instead
-    return Promise.reject(errMsg);
+    return Observable.throw(errMsg);
 }
 
-function postHandle(apiUrl: string, args: Object[]): Promise<any> {
+function postHandle(apiUrl: string, args: Object[]): Observable<any> {
     if (_getToken) {
 
         let apiToken = getTokenFromCookie();
@@ -102,19 +103,17 @@ function postHandle(apiUrl: string, args: Object[]): Promise<any> {
     }
 }
 
-function post(apiUrl: string, headers: Headers): Promise<any> {
+function post(apiUrl: string, headers: Headers): Observable<any> {
 
     return _http.post(apiUrl, null, { headers: headers })
-        .toPromise()
-        .then((res: Response) => {
+        .map((res: Response) => {
             let data = res.json();
             if (data.err) {
-                return Promise.reject(data.err);
+                return Observable.throw(data.err);
             }
-            return (res.json().val)
+            return (res.json().val);
         })
         .catch((error: any) => handleError(error));
-
 }
 
 function getTokenFromCookie(): string {
@@ -127,8 +126,7 @@ function getToken() {
     _headers.delete("Authorization");
     let params = `grant_type=${_tokenConfig.params.grant_type}&client_id=${_tokenConfig.params.client_id}&client_secret=${_tokenConfig.params.client_secret}`;
     return _http.post(_tokenConfig.apiTokenUrl, params, { headers: _headers })
-        .toPromise()
-        .then((res: Response) => {
+        .map((res: Response) => {
             let token = res.json();
             let tokenValue: string = token.access_token;
             setToken(tokenValue, token.expires_in);
