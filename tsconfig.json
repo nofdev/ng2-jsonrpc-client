@@ -5,13 +5,11 @@
         "target": "ES5",
         "emitDecoratorMetadata": true,
         "experimentalDecorators": true,
-        "sourceMap": true,
-        "declaration": true
+        "sourceMap": false,
+        "declaration":true
     },
-    "files": [
-        "src/client.ts",
-        "src/client.config.ts",
-        "index.ts"
+    "includes": [
+        "src/**/*"
     ],
     "exclude": [
         "node_modules"

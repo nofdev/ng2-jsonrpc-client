@@ -33,7 +33,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
 
         _getToken = true;
         if (!getTokenFromCookie()) {
-            getToken();
+            getToken().subscribe();
         }
     }
 
