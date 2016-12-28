@@ -3,6 +3,7 @@ import { Cookie } from 'ng2-cookies/ng2-cookies';
 import {Observable} from 'rxjs/Observable';
 import 'rxjs/add/operator/map';
 import 'rxjs/add/operator/catch';
+import 'rxjs/add/observable/throw';
 
 import { clientConfig, apiTokenConfig } from './client.config';
 
