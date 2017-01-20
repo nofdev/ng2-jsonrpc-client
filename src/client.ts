@@ -1,6 +1,6 @@
 import { Http, Response, Headers, RequestOptions } from '@angular/http';
 import { Cookie } from 'ng2-cookies/ng2-cookies';
-import {Observable} from 'rxjs/Observable';
+import { Observable } from 'rxjs/Observable';
 import 'rxjs/add/operator/map';
 import 'rxjs/add/operator/catch';
 import 'rxjs/add/observable/throw';
@@ -8,6 +8,7 @@ import 'rxjs/add/observable/throw';
 import { clientConfig, apiTokenConfig } from './client.config';
 
 const API_TOKEN_KEY = "api_token";
+const AUTH_TOKEN_KEY = "auth_token";
 
 let _headers: Headers = new Headers();
 _headers.append("Content-Type", "application/x-www-form-urlencoded");
@@ -41,7 +42,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
 
     let jsonidl: any;
 
-    for (let item of jsonIdl) {
+    for (let item of jsonIdl.interfaces) {
         if (item.package + "." + item.name === config.facadeName) {
             jsonidl = item;
             break;
@@ -57,9 +58,13 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
 
             let args: any[] = [];
             for (let i: number = 0; i < element.args.length; i++) {
-                args.push(`"${arguments[i]}"`);
+                if (element.args[i].type.indexOf('.') > -1) {
+                    args.push(JSON.stringify(arguments[i]));
+                } else {
+                    args.push(`"${arguments[i]}"`);
+                }
             }
-            let apiUrl = `${apiBaseUrl}/${element.name}?params=[${args.join(',')}]`;
+            let apiUrl = `${apiBaseUrl}/${element.name}?params=[${encodeURI(args.join(','))}]`;
 
             return postHandle(apiUrl, args);
 
@@ -74,18 +79,22 @@ function handleError(error: any) {
         error.status ? `${error.status} - ${error.statusText}` : 'Server error';
     let errBody: any;
     let errDetail: string;
-    if (typeof error._body === "string") {
-        errBody = JSON.parse(error._body)
-        errDetail = `${errBody.code} = ${errBody.error} - ${errBody.error_description}`;
-    } if (typeof error._body === "object") {
-        errDetail = `it looks like a http error. status: ${error.status}, ok: ${error.ok}, statusText: ${error.statusText}`;
-    }
-    else {
-        if (error.msg) {//server custom error
-            return Observable.throw(error);
+    if (error._body !== '') {
+        if (typeof error._body === "string") {
+            errBody = JSON.parse(error._body)
+            errDetail = `${errBody.code} = ${errBody.error} - ${errBody.error_description}`;
+        } if (typeof error._body === "object") {
+            errDetail = `it looks like a http error. status: ${error.status}, ok: ${error.ok}, statusText: ${error.statusText}`;
         }
+        else {
+            if (error.msg) {//server custom error
+                return Observable.throw(error);
+            }
+        }
+    } else {
+        return Observable.throw(error);
     }
-    console.error(errDetail); // log to console instead
+    console.log(errDetail); // log to console instead
     return Observable.throw(errMsg);
 }
 
@@ -93,8 +102,22 @@ function postHandle(apiUrl: string, args: Object[]): Observable<any> {
     if (_getToken) {
 
         let apiToken = getTokenFromCookie();
-        if (!_headers.has("Authorization")) {
-            _headers.append("Authorization", `Bearer ${apiToken}`);
+        if(apiToken){
+            if (!_headers.has("Authorization")) {
+                _headers.append("Authorization", `Bearer ${apiToken}`);
+            }else{
+                _headers.set("Authorization", `Bearer ${apiToken}`);
+            }
+        }else{
+            //TODO handle if there was not gateway token.
+        }
+        let authToken = getAuthToken();
+        if (authToken) {
+            if (!_headers.has("X-Auth-Token")) {
+                _headers.append("X-Auth-Token", authToken);
+            } else {
+                _headers.set("X-Auth-Token", authToken);
+            }
         }
 
         return post(apiUrl, _headers);
@@ -138,5 +161,9 @@ function getToken() {
 }
 
 function setToken(token: string, expires: number) {
-    Cookie.set(API_TOKEN_KEY, token, expires / 86400);
+    Cookie.set(API_TOKEN_KEY, token, expires / 86400); //cookie有效期时间单位是“天”
+}
+
+function getAuthToken() {
+    return Cookie.get(AUTH_TOKEN_KEY);
 }

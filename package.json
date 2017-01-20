@@ -1,6 +1,6 @@
 {
   "name": "ng2-jsonrpc-client",
-  "version": "0.0.18",
+  "version": "0.0.20",
   "description": "A JSON-RPC Client for angular2.",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
