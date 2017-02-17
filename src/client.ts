@@ -7,8 +7,8 @@ import 'rxjs/add/observable/throw';
 
 import { clientConfig, apiTokenConfig } from './client.config';
 
-const API_TOKEN_KEY = "api_token";
-const AUTH_TOKEN_KEY = "auth_token";
+const API_TOKEN_KEY = "gateway-token";
+const AUTH_TOKEN_KEY = "x-auth-token";
 
 let _headers: Headers = new Headers();
 _headers.append("Content-Type", "application/x-www-form-urlencoded");
@@ -36,6 +36,8 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
         _getToken = true;
         if (!getTokenFromCookie()) {
             getToken().subscribe();
+        }else{
+            
         }
     }
 
@@ -60,6 +62,8 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             for (let i: number = 0; i < element.args.length; i++) {
                 if (element.args[i].type.indexOf('.') > -1) {
                     args.push(JSON.stringify(arguments[i]));
+                } else if(Array.isArray(arguments[i])){
+                    args.push(`[${arguments[i]}]`);
                 } else {
                     args.push(`"${arguments[i]}"`);
                 }
@@ -135,7 +139,7 @@ function post(apiUrl: string, headers: Headers): Observable<any> {
             if (data.err) {
                 return Observable.throw(data.err);
             }
-            return (res.json().val);
+            return (data.val);
         })
         .catch((error: any) => handleError(error));
 }
