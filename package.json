@@ -1,11 +1,11 @@
 {
   "name": "ng2-jsonrpc-client",
-  "version": "0.0.22",
+  "version": "0.0.31",
   "description": "A JSON-RPC Client for angular2.",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
-    "build": "npm i && tsc"
+    "build": "npm i && tsc ./"
   },
   "repository": {
     "type": "git",

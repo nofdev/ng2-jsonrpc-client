@@ -1,7 +1,10 @@
 import { Http, Response, Headers, RequestOptions } from '@angular/http';
 import { Cookie } from 'ng2-cookies/ng2-cookies';
 import { Observable } from 'rxjs/Observable';
+import { Observer } from 'rxjs/Observer';
 import 'rxjs/add/operator/map';
+import 'rxjs/add/operator/mergeMap';
+import 'rxjs/add/operator/concat';
 import 'rxjs/add/operator/catch';
 import 'rxjs/add/observable/throw';
 
@@ -14,7 +17,8 @@ let _headers: Headers = new Headers();
 _headers.append("Content-Type", "application/x-www-form-urlencoded");
 
 let _tokenConfig: apiTokenConfig;
-let _getToken: boolean = false;
+//是否使用api token
+let _useToken: boolean = false;
 
 let _http: Http;
 
@@ -33,11 +37,9 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             throw Error("apiTokenUrl and params's client_id/client_secret/grant_type of config's api_tokenConfig can not be null!");
         }
 
-        _getToken = true;
+        _useToken = true;
         if (!getTokenFromCookie()) {
-            getToken().subscribe();
-        }else{
-            
+            getTokenFromServer().subscribe();
         }
     }
 
@@ -62,7 +64,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             for (let i: number = 0; i < element.args.length; i++) {
                 if (element.args[i].type.indexOf('.') > -1) {
                     args.push(JSON.stringify(arguments[i]));
-                } else if(Array.isArray(arguments[i])){
+                } else if (Array.isArray(arguments[i])) {
                     args.push(`[${arguments[i]}]`);
                 } else {
                     args.push(`"${arguments[i]}"`);
@@ -70,7 +72,7 @@ export let clientFactory = (http: Http, jsonIdl: any, config: clientConfig) => {
             }
             let apiUrl = `${apiBaseUrl}/${element.name}?params=[${encodeURI(args.join(','))}]`;
 
-            return postHandle(apiUrl, args);
+            return postHandler(apiUrl);
 
         }
     });
@@ -102,44 +104,47 @@ function handleError(error: any) {
     return Observable.throw(errMsg);
 }
 
-function postHandle(apiUrl: string, args: Object[]): Observable<any> {
-    if (_getToken) {
-
+function postHandler(apiUrl: string): Observable<any> {
+    if (_useToken) {
         let apiToken = getTokenFromCookie();
-        if(apiToken){
-            if (!_headers.has("Authorization")) {
-                _headers.append("Authorization", `Bearer ${apiToken}`);
-            }else{
-                _headers.set("Authorization", `Bearer ${apiToken}`);
-            }
-        }else{
-            //TODO handle if there was not gateway token.
+        if (apiToken) {
+            setHeader(apiToken);
+            return post(apiUrl, _headers);
+        } else {
+            return getTokenFromServer()
+                .mergeMap(() => {
+                    return postHandler(apiUrl);
+                });
         }
-        let authToken = getAuthToken();
-        if (authToken) {
-            if (!_headers.has("X-Auth-Token")) {
-                _headers.append("X-Auth-Token", authToken);
-            } else {
-                _headers.set("X-Auth-Token", authToken);
-            }
-        }
-
-        return post(apiUrl, _headers);
-
     } else {
         return post(apiUrl, _headers);
     }
 }
 
-function post(apiUrl: string, headers: Headers): Observable<any> {
+function setHeader(apiToken: string) {
+    if (!_headers.has("Authorization")) {
+        _headers.append("Authorization", `Bearer ${apiToken}`);
+    } else {
+        _headers.set("Authorization", `Bearer ${apiToken}`);
+    }
+    let authToken = getAuthToken();
+    if (authToken) {
+        if (!_headers.has("X-Auth-Token")) {
+            _headers.append("X-Auth-Token", authToken);
+        } else {
+            _headers.set("X-Auth-Token", authToken);
+        }
+    }
+}
 
+function post(apiUrl: string, headers: Headers): Observable<any> {
     return _http.post(apiUrl, null, { headers: headers })
         .map((res: Response) => {
             let data = res.json();
             if (data.err) {
                 return Observable.throw(data.err);
             }
-            return (data.val);
+            return data.val;
         })
         .catch((error: any) => handleError(error));
 }
@@ -150,18 +155,24 @@ function getTokenFromCookie(): string {
     return token;
 }
 
-function getToken() {
+function getTokenParams(): string {
+    return `grant_type=${_tokenConfig.params.grant_type}&client_id=${_tokenConfig.params.client_id}&client_secret=${_tokenConfig.params.client_secret}`;
+}
+
+function getTokenFromServer(): Observable<any> {
     _headers.delete("Authorization");
-    let params = `grant_type=${_tokenConfig.params.grant_type}&client_id=${_tokenConfig.params.client_id}&client_secret=${_tokenConfig.params.client_secret}`;
+    let params = getTokenParams();
     return _http.post(_tokenConfig.apiTokenUrl, params, { headers: _headers })
         .map((res: Response) => {
-            let token = res.json();
-            let tokenValue: string = token.access_token;
-            setToken(tokenValue, token.expires_in);
-
-            setInterval(getToken, token.expires_in * 900);//每隔有效期的90%更新一次token
+            tokenHandler(res);
         })
         .catch((error: any) => handleError(error));
+}
+
+function tokenHandler(res: any) {
+    let token = res.json();
+    setToken(token.access_token, token.expires_in);
+    setInterval(getTokenFromServer, token.expires_in * 900);//每隔有效期的90%更新一次token
 }
 
 function setToken(token: string, expires: number) {
